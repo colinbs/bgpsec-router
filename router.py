@@ -20,8 +20,6 @@ my_as_pos = 20
 target_as = b"\x00\x11\x00\x00"
 target_as_pos = 49
 
-bgp_port = 179
-
 log_level = 0
 
 class States(enum.Enum):
@@ -47,9 +45,10 @@ def send_data(conn, addr, data):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BGPsec 'Router'")
-    parser.add_argument("host", help="hostname or IP address to host from")
-    parser.add_argument("port", type=int, help="port to host from")
-    parser.add_argument("target", help="IP address of the peering router")
+    parser.add_argument("host", help="Hostname or IP address to host from")
+    parser.add_argument("port", type=int, help="Port to host from")
+    parser.add_argument("target-ip", help="IP address of the peering router")
+    parser.add_argument("target-port", help="Port of the peering router")
     parser.add_argument("-v", "--verbose", action="store_true", help="print more verbose debug output")
     args = parser.parse_args()
 
@@ -58,14 +57,15 @@ if __name__ == "__main__":
 
     host = args.host
     port = args.port
-    target = args.target
+    target_ip = args.target_ip
+    target_ip = args.target_port
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     STATE = States.RECV
     with sock as s:
         s.bind((host, port))
-        s.connect((target, bgp_port))
+        s.connect((target_ip, target_port))
         while True:
             continue
             s.listen(1)
