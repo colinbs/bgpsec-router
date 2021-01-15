@@ -47,8 +47,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BGPsec 'Router'")
     parser.add_argument("host", help="Hostname or IP address to host from")
     parser.add_argument("port", type=int, help="Port to host from")
-    parser.add_argument("target-ip", help="IP address of the peering router")
-    parser.add_argument("target-port", help="Port of the peering router")
+    parser.add_argument("target_ip", help="IP address of the peering router")
+    parser.add_argument("target_port", type=int, help="Port of the peering router")
     parser.add_argument("-v", "--verbose", action="store_true", help="print more verbose debug output")
     args = parser.parse_args()
 
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     host = args.host
     port = args.port
     target_ip = args.target_ip
-    target_ip = args.target_port
+    target_port = args.target_port
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
