@@ -64,9 +64,10 @@ if __name__ == "__main__":
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     STATE = States.RECV
     with sock as s:
-        s.connect((target, bgp_port))
         s.bind((host, port))
+        s.connect((target, bgp_port))
         while True:
+            continue
             s.listen(1)
             conn, addr = s.accept()
             with conn:
