@@ -8,15 +8,33 @@ import sys
 import copy
 
 # BGPsec Open
-bgpsec_open = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x6a\x01\x04\x5b\xa0\x00\xb4\xac\x12\x00\x03\x4d\x02\x06\x01\x04\x00\x01\x00\x01\x02\x02\x80\x00\x02\x02\x02\x00\x02\x06\x41\x04\x00\x01\x00\x00\x02\x06\x45\x04\x00\x01\x01\x01\x02\x09\x49\x07\x05\x62\x67\x70\x64\x32\x00\x02\x05\x07\x03\x08\x00\x01\x02\x05\x07\x03\x00\x00\x01\x02\x05\x07\x03\x08\x00\x02\x02\x05\x07\x03\x00\x00\x02\x02\x04\x40\x02\x80\x78"
-
+bgpsec_open = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff" \
+              b"\x00\x6e" \
+              b"\x01" \
+              b"\x04" \
+              b"\x30\x39" \
+              b"\x00\xb4" \
+              b"\xac\x12\x00\xc8" \
+              b"\x51" \
+              b"\x02\x06\x01\x04\x00\x01\x00\x01" \
+              b"\x02\x02\x80\x00" \
+              b"\x02\x02\x02\x00" \
+              b"\x02\x02\x46\x00" \
+              b"\x02\x06\x41\x04\x00\x00\x30\x38" \
+              b"\x02\x06\x45\x04\x00\x01\x01\x01" \
+              b"\x02\x09\x49\x07\x05\x62\x67\x70\x64\x31\x00" \
+              b"\x02\x05\x07\x03\x08\x00\x01" \
+              b"\x02\x05\x07\x03\x00\x00\x01" \
+              b"\x02\x05\x07\x03\x08\x00\x02" \
+              b"\x02\x05\x07\x03\x00\x00\x02" \
+              b"\x02\x04\x40\x02\x00\x78"
 # End of RIB
 eor = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x17\x02\x00\x00\x00\x00"
 
-bgp_id = b"\xac\x12\x00\x04"
-bgp_id_pos = 24
-my_as = b"\x5b\xa1"
+my_as = b"\x30\x39"
 my_as_pos = 20
+bgp_id = b"\xac\x12\x00\xc8"
+bgp_id_pos = 24
 target_as = b"\x00\x11\x00\x00"
 target_as_pos = 49
 
@@ -27,15 +45,15 @@ class States(enum.Enum):
     SEND = 2
     DONE = 3
 
-bgpsec_open = bgpsec_open[0:bgp_id_pos] +\
-              bgp_id +\
-              bgpsec_open[bgp_id_pos + len(bgp_id):]
-bgpsec_open = bgpsec_open[0:my_as_pos] +\
-              my_as +\
-              bgpsec_open[my_as_pos + len(my_as):]
-bgpsec_open = bgpsec_open[0:target_as_pos] +\
-              target_as +\
-              bgpsec_open[target_as_pos + len(target_as):]
+# bgpsec_open = bgpsec_open[0:bgp_id_pos] +\
+              # bgp_id +\
+              # bgpsec_open[bgp_id_pos + len(bgp_id):]
+# bgpsec_open = bgpsec_open[0:my_as_pos] +\
+              # my_as +\
+              # bgpsec_open[my_as_pos + len(my_as):]
+# bgpsec_open = bgpsec_open[0:target_as_pos] +\
+              # target_as +\
+              # bgpsec_open[target_as_pos + len(target_as):]
 
 def send_data(conn, addr, data):
     if log_level:
