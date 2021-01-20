@@ -31,6 +31,12 @@ bgpsec_open = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff
 # End of RIB
 eor = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x17\x02\x00\x00\x00\x00"
 
+# Keepalive
+keepalive = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x13\x04"
+
+# Notification
+notification = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x15\x03\x05\x02"
+
 my_as = b"\x30\x39"
 my_as_pos = 20
 bgp_id = b"\xac\x12\x00\xc8"
@@ -41,9 +47,15 @@ target_as_pos = 49
 log_level = 0
 
 class States(enum.Enum):
-    RECV = 1
-    SEND = 2
-    DONE = 3
+    IDLE = 1
+    CONNECT = 2
+    ACTIVE = 3
+    OPENSENT = 4
+    OPENCONFIRM = 5
+    ESTABLISHED = 6
+    RECV = 7
+    SEND = 8
+    DONE = 9
 
 # bgpsec_open = bgpsec_open[0:bgp_id_pos] +\
               # bgp_id +\
@@ -80,32 +92,45 @@ if __name__ == "__main__":
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    STATE = States.RECV
+    STATE = States.CONNECT
     with sock as s:
-        s.bind((host, port))
         s.connect((target_ip, target_port))
-        while True:
-            continue
-            s.listen(1)
-            conn, addr = s.accept()
-            with conn:
-                if log_level: print(f"Connected by {addr[0]}:{addr[1]}")
-                while STATE != States.DONE:
-                    try:
-                        if STATE == States.RECV:
-                            data = conn.recv(1024)
-                            STATE = States.SEND
-                        elif STATE == States.SEND:
-                            send_data(conn, addr[0], cache_response)
-                            if log_level: print(f"Send Router Keys to {addr[0]}...", end=" ")
-                            for key in key_vault:
-                                send_data(conn, addr[0], key)
+        STATE = States.OPENSENT
+        s.sendall(bgpsec_open)
+        data = s.recv(4096)
+        print(repr(data))
+        STATE = States.OPENCONFIRM
+        s.sendall(keepalive)
+        data = s.recv(4096)
+        print(repr(data))
+        STATE = States.ESTABLISHED
+        data = s.recv(4096)
+        print(repr(data))
+        STATE = States.SEND
+        s.sendall(eor)
+        while data := s.recv(4096):
+            print(repr(data))
+        STATE = States.IDLE
+        s.sendall(notification)
+        sys.exit()
+        # with conn:
+            # if log_level: print(f"Connected by {addr[0]}:{addr[1]}")
+            # while STATE != States.DONE:
+                # try:
+                    # if STATE == States.RECV:
+                        # data = conn.recv(1024)
+                        # STATE = States.SEND
+                    # elif STATE == States.SEND:
+                        # send_data(conn, addr[0], cache_response)
+                        # if log_level: print(f"Send Router Keys to {addr[0]}...", end=" ")
+                        # for key in key_vault:
+                            # send_data(conn, addr[0], key)
 
-                            send_data(conn, addr[0], eor)
-                            STATE = States.DONE
-                    except:
-                        STATE = States.DONE
-                        break
-                conn.close()
-                if log_level: print(f"Closed connection to {addr[0]}:{addr[1]}")
-                STATE = States.RECV
+                        # send_data(conn, addr[0], eor)
+                        # STATE = States.DONE
+                # except:
+                    # STATE = States.DONE
+                    # break
+            # conn.close()
+            # if log_level: print(f"Closed connection to {addr[0]}:{addr[1]}")
+            # STATE = States.RECV
