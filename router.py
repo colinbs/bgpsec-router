@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 import copy
+import struct
 
 # BGPsec Open
 bgpsec_open = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff" \
@@ -73,12 +74,48 @@ def send_data(conn, addr, data):
 
     conn.sendall(data)
 
+def get_upd(upd_file):
+    # Position of the file index
+    curr_i = 0
+
+    with open(upd_file, "rb") as f:
+        # Check for EoF
+        while f.read() != None:
+            # Initialize the array with each iteration to empty it
+            byte_a = bytearray()
+
+            # Jump to the len field
+            f.seek(curr_i + 17)
+            
+            # Read two bytes
+            fb = struct.unpack("<B", f.read(1))
+            sb = struct.unpack("<B", f.read(1))
+
+            # Determine the length of the update
+            upd_len = (sb[0] << 8) | fb[0]
+
+            # Jump back to the beginning of the update
+            f.seek(curr_i)
+
+            # Iterate trough the update
+            for i in range(0, upd_len):
+                # Read one byte and append its integer value to byte_a
+                b = struct.unpack("<B", f.read(1))
+                byte_a.append(b[0])
+
+            # Add the update length to the file index position
+            curr_i += upd_len
+
+            # yield the byte array
+            yield byte_a
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BGPsec 'Router'")
     parser.add_argument("host", help="Hostname or IP address to host from")
     parser.add_argument("port", type=int, help="Port to host from")
     parser.add_argument("target_ip", help="IP address of the peering router")
     parser.add_argument("target_port", type=int, help="Port of the peering router")
+    parser.add_argument("upd_file", help="File containing BGP(sec) updates in binary format")
     parser.add_argument("-v", "--verbose", action="store_true", help="print more verbose debug output")
     args = parser.parse_args()
 
@@ -107,6 +144,9 @@ if __name__ == "__main__":
         data = s.recv(4096)
         print(repr(data))
         STATE = States.SEND
+
+        upd_i = get_upd(args.upd_file)
+        s.sendall(next(upd_i))
         s.sendall(eor)
         while data := s.recv(4096):
             print(repr(data))
