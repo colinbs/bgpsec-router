@@ -146,7 +146,8 @@ if __name__ == "__main__":
         STATE = States.SEND
 
         upd_i = get_upd(args.upd_file)
-        s.sendall(next(upd_i))
+        while upd := next(upd_i):
+            s.sendall(upd)
         s.sendall(eor)
         while data := s.recv(4096):
             print(repr(data))
