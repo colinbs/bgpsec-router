@@ -140,3 +140,8 @@ cython_debug/
 
 # Autocomplete files
 tags
+
+# Docker setup stuff
+setup.sh
+spki-cache/
+keys/
