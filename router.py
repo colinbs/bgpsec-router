@@ -7,6 +7,7 @@ import os
 import sys
 import copy
 import struct
+import time
 
 # BGPsec Open
 bgpsec_open = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff" \
@@ -77,6 +78,8 @@ def send_data(conn, addr, data):
 def get_upd(upd_file):
     # Position of the file index
     curr_i = 0
+    # Number of read updates. Only used for logging
+    upd_count = 0
 
     with open(upd_file, "rb") as f:
         # Check for EoF
@@ -85,14 +88,15 @@ def get_upd(upd_file):
             byte_a = bytearray()
 
             # Jump to the len field
-            f.seek(curr_i + 17)
+            f.seek(curr_i + 16)
             
             # Read two bytes
             fb = struct.unpack("<B", f.read(1))
             sb = struct.unpack("<B", f.read(1))
 
             # Determine the length of the update
-            upd_len = (sb[0] << 8) | fb[0]
+            upd_len = (fb[0] << 8) | sb[0]
+            #print(f"Update length: {upd_len}")
 
             # Jump back to the beginning of the update
             f.seek(curr_i)
@@ -105,6 +109,8 @@ def get_upd(upd_file):
 
             # Add the update length to the file index position
             curr_i += upd_len
+
+            if log_level == 1: print(f"Reading update {upd_count}", end='\r')
 
             # yield the byte array
             yield byte_a
@@ -130,48 +136,48 @@ if __name__ == "__main__":
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     STATE = States.CONNECT
+
+    # To establish a BGP session, we first need to send an open message,
+    # followed by a keepalive. Then, updates can be sent. At the end of
+    # the stream of updates, an EoR should follow to indicate, no more
+    # updates are coming. Last, to terminate the BGP session, we send a
+    # notification message.
     with sock as s:
+        # Establish a TCP connection to the BGP router
         s.connect((target_ip, target_port))
         STATE = States.OPENSENT
+
+        # Send and receive a BGP open message containing the BGPsec capabilities
         s.sendall(bgpsec_open)
         data = s.recv(4096)
-        print(repr(data))
+        if log_level == 1: print(data)
         STATE = States.OPENCONFIRM
+
+        # Send and receive a BGP keepalive message
         s.sendall(keepalive)
         data = s.recv(4096)
-        print(repr(data))
+        if log_level == 1: print(data)
         STATE = States.ESTABLISHED
-        data = s.recv(4096)
-        print(repr(data))
-        STATE = States.SEND
 
+        # Initialize the BGPsec update iterator
         upd_i = get_upd(args.upd_file)
-        while upd := next(upd_i):
-            s.sendall(upd)
-        s.sendall(eor)
-        while data := s.recv(4096):
-            print(repr(data))
-        STATE = States.IDLE
-        s.sendall(notification)
-        sys.exit()
-        # with conn:
-            # if log_level: print(f"Connected by {addr[0]}:{addr[1]}")
-            # while STATE != States.DONE:
-                # try:
-                    # if STATE == States.RECV:
-                        # data = conn.recv(1024)
-                        # STATE = States.SEND
-                    # elif STATE == States.SEND:
-                        # send_data(conn, addr[0], cache_response)
-                        # if log_level: print(f"Send Router Keys to {addr[0]}...", end=" ")
-                        # for key in key_vault:
-                            # send_data(conn, addr[0], key)
 
-                        # send_data(conn, addr[0], eor)
-                        # STATE = States.DONE
-                # except:
-                    # STATE = States.DONE
-                    # break
-            # conn.close()
-            # if log_level: print(f"Closed connection to {addr[0]}:{addr[1]}")
-            # STATE = States.RECV
+        # upd will contain the bytes of all updates that are read via the iterator
+        upd = bytearray()
+
+        # Read the BGPsec updates from the iterator and append them to upd. The
+        # reason behind this is that sending the BGPsec updates with each iteration
+        # is very slow for some reason and creates a bottleneck this way
+        for i in range(0, 100):
+            upd += bytearray(next(upd_i))
+        if log_level == 1: print("") # clear last carriage return (\r)
+
+        # Send the accumulated BGPsec updates
+        s.sendall(bytes(upd))
+
+        # Send an EoR message to indicate the end of the BGPsec update stream
+        s.sendall(eor)
+        STATE = States.IDLE
+
+        # Send a notification message to properly terminate the BGP session
+        s.sendall(notification)
