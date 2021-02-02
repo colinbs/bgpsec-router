@@ -224,11 +224,11 @@ if __name__ == "__main__":
             if log_level == 1: print("") # clear last carriage return (\r)
 
             # Send the accumulated BGPsec updates
-            #s.sendall(bytes(upd))
+            s.sendall(bytes(upds))
 
             # Send an EoR message to indicate the end of the BGPsec update stream
-            #s.sendall(eor)
-            #STATE = States.IDLE
+            s.sendall(eor)
+            STATE = States.IDLE
 
             # Send a notification message to properly terminate the BGP session
-            #s.sendall(notification)
+            s.sendall(notification)
