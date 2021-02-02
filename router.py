@@ -46,6 +46,9 @@ bgp_id_pos = 24
 target_as = b"\x00\x11\x00\x00"
 target_as_pos = 49
 
+# Number of read updates. Only used for logging
+upd_count = 1
+
 log_level = 0
 
 class States(enum.Enum):
@@ -75,45 +78,95 @@ def send_data(conn, addr, data):
 
     conn.sendall(data)
 
+def get_upd_ret(upd_file):
+    global upd_count
+
+    # Position of the file index
+    curr_i = upd_file.tell()
+
+    # Check for EoF
+    last = upd_file.read(1)
+    if last == b"" or last == b"\n":
+        return None
+
+    # Initialize the array
+    byte_a = bytearray()
+
+    # Jump to the len field
+    upd_file.seek(curr_i + 16)
+
+    # Read two bytes
+    fb = struct.unpack("<B", upd_file.read(1))
+    sb = struct.unpack("<B", upd_file.read(1))
+
+    # Determine the length of the update
+    upd_len = (fb[0] << 8) | sb[0]
+    # print(f"Update length: {upd_len}")
+
+    # Jump back to the beginning of the update
+    upd_file.seek(curr_i)
+    b = upd_file.read(upd_len)
+    byte_a.extend(b)
+
+    # Iterate trough the update
+    # for i in range(0, upd_len):
+        # Read one byte and append its integer value to byte_a
+        #b = struct.unpack("<B", upd_file.read(1))
+        # byte_a.append(b[0])
+
+    # Add the update length to the file index position
+    curr_i += upd_len
+
+    if log_level == 1:
+        print(f"Reading update {upd_count}", end='\r')
+        upd_count += 1
+
+    # return the byte array
+    return byte_a
+
+
 def get_upd(upd_file):
     # Position of the file index
     curr_i = 0
     # Number of read updates. Only used for logging
-    upd_count = 0
+    upd_count = 1
 
-    with open(upd_file, "rb") as f:
-        # Check for EoF
-        while f.read() != None:
-            # Initialize the array with each iteration to empty it
-            byte_a = bytearray()
+    # Check for EoF
+    while upd_file.read() != "":
+        # Initialize the array with each iteration to empty it
+        byte_a = bytearray()
 
-            # Jump to the len field
-            f.seek(curr_i + 16)
-            
-            # Read two bytes
-            fb = struct.unpack("<B", f.read(1))
-            sb = struct.unpack("<B", f.read(1))
+        # Jump to the len field
+        upd_file.seek(curr_i + 16)
+        
+        # Read two bytes
+        fb = struct.unpack("<B", upd_file.read(1))
+        sb = struct.unpack("<B", upd_file.read(1))
 
-            # Determine the length of the update
-            upd_len = (fb[0] << 8) | sb[0]
-            #print(f"Update length: {upd_len}")
+        # Determine the length of the update
+        upd_len = (fb[0] << 8) | sb[0]
+        #print(f"Update length: {upd_len}")
 
-            # Jump back to the beginning of the update
-            f.seek(curr_i)
+        # Jump back to the beginning of the update
+        upd_file.seek(curr_i)
+        b = upd_file.read(upd_len)
+        byte_a.extend(b)
 
-            # Iterate trough the update
-            for i in range(0, upd_len):
-                # Read one byte and append its integer value to byte_a
-                b = struct.unpack("<B", f.read(1))
-                byte_a.append(b[0])
+        # Iterate trough the update
+        # for i in range(0, upd_len):
+            # Read one byte and append its integer value to byte_a
+            #b = struct.unpack("<B", upd_file.read(1))
+            # byte_a.append(b[0])
 
-            # Add the update length to the file index position
-            curr_i += upd_len
+        # Add the update length to the file index position
+        curr_i += upd_len
 
-            if log_level == 1: print(f"Reading update {upd_count}", end='\r')
+        if log_level == 1:
+            print(f"Reading update {upd_count}", end='\r')
+            upd_count += 1
 
-            # yield the byte array
-            yield byte_a
+        # yield the byte array
+        yield byte_a
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BGPsec 'Router'")
@@ -142,42 +195,40 @@ if __name__ == "__main__":
     # the stream of updates, an EoR should follow to indicate, no more
     # updates are coming. Last, to terminate the BGP session, we send a
     # notification message.
-    with sock as s:
-        # Establish a TCP connection to the BGP router
-        s.connect((target_ip, target_port))
-        STATE = States.OPENSENT
+    with open(args.upd_file, "rb") as f:
+        with sock as s:
+            # Establish a TCP connection to the BGP router
+            s.connect((target_ip, target_port))
+            STATE = States.OPENSENT
 
-        # Send and receive a BGP open message containing the BGPsec capabilities
-        s.sendall(bgpsec_open)
-        data = s.recv(4096)
-        if log_level == 1: print(data)
-        STATE = States.OPENCONFIRM
+            # Send and receive a BGP open message containing the BGPsec capabilities
+            s.sendall(bgpsec_open)
+            data = s.recv(4096)
+            if log_level == 1: print(data)
+            STATE = States.OPENCONFIRM
 
-        # Send and receive a BGP keepalive message
-        s.sendall(keepalive)
-        data = s.recv(4096)
-        if log_level == 1: print(data)
-        STATE = States.ESTABLISHED
+            # Send and receive a BGP keepalive message
+            s.sendall(keepalive)
+            data = s.recv(4096)
+            if log_level == 1: print(data)
+            STATE = States.ESTABLISHED
 
-        # Initialize the BGPsec update iterator
-        upd_i = get_upd(args.upd_file)
+            # upd will contain the bytes of all updates that are read via the iterator
+            upds = bytearray()
 
-        # upd will contain the bytes of all updates that are read via the iterator
-        upd = bytearray()
+            # Read the BGPsec updates from the iterator and append them to upd. The
+            # reason behind this is that sending the BGPsec updates with each iteration
+            # is very slow for some reason and creates a bottleneck this way
+            while next_upd := get_upd_ret(f):
+                upds += bytearray(next_upd)
+            if log_level == 1: print("") # clear last carriage return (\r)
 
-        # Read the BGPsec updates from the iterator and append them to upd. The
-        # reason behind this is that sending the BGPsec updates with each iteration
-        # is very slow for some reason and creates a bottleneck this way
-        for i in range(0, 100):
-            upd += bytearray(next(upd_i))
-        if log_level == 1: print("") # clear last carriage return (\r)
+            # Send the accumulated BGPsec updates
+            #s.sendall(bytes(upd))
 
-        # Send the accumulated BGPsec updates
-        s.sendall(bytes(upd))
+            # Send an EoR message to indicate the end of the BGPsec update stream
+            #s.sendall(eor)
+            #STATE = States.IDLE
 
-        # Send an EoR message to indicate the end of the BGPsec update stream
-        s.sendall(eor)
-        STATE = States.IDLE
-
-        # Send a notification message to properly terminate the BGP session
-        s.sendall(notification)
+            # Send a notification message to properly terminate the BGP session
+            #s.sendall(notification)
