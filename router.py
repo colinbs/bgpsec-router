@@ -216,8 +216,9 @@ if __name__ == "__main__":
             # Wait for peer to send all its data. If we proceed to fast, we end up
             # closing the connection before the peer had time to wait for our updates
             # to come in
-            while s.recv(4096):
-                continue
+            # while s.recv(4096):
+                # continue
+            data = s.recv(4096)
 
             # upd will contain the bytes of all updates that are read via the iterator
             upds = bytearray()
