@@ -2,7 +2,7 @@ FROM archlinux
 
 RUN pacman -Sy archlinux-keyring --noconfirm \
     && pacman -Syyu --noconfirm \
-    && pacman -S --noconfirm --needed git python base-devel cmake
+    && pacman -S --noconfirm --needed git python base-devel cmake vim
 
 #RUN git clone https://github.com/colinbs/rtrlib.git \
 #    && cd rtrlib \

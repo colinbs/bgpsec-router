@@ -227,11 +227,13 @@ if __name__ == "__main__":
             # reason behind this is that sending the BGPsec updates with each iteration
             # is very slow for some reason and creates a bottleneck this way
             while next_upd := get_upd_ret(f):
-                upds += bytearray(next_upd)
+                # upds += bytearray(next_upd)
+                s.sendall(bytes(next_upd))
+                time.sleep(.002)
             if log_level == 1: print("") # clear last carriage return (\r)
 
             # Send the accumulated BGPsec updates
-            s.sendall(bytes(upds))
+            # s.sendall(bytes(upds))
 
             # Send an EoR message to indicate the end of the BGPsec update stream
             s.sendall(eor)
