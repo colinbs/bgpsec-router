@@ -1,5 +1,19 @@
 #!/usr/bin/python3
 
+# This tool is used as a dummy BGPsec "router". It is not a fully functional software
+# router, but rather an endpoint that sends static BGP(sec) updates to any peer that
+# connects to this endpoint. The updates that this endpoint sends are loaded from a
+# given file that holds these updates in a binary format. Such a file can be generated
+# using a different tool which can be found here:
+# https://github.com/colinbs/bgpsec-path-gen
+# This tool is mainly used to forge erroneous messages, e.g. messages that contain
+# illegal values, to check how a peering software router behaves. Usually, this is
+# tedious to do in an actual software router implementation.
+
+# The following code is hardly optimized and will most likely not work for your own
+# setup. I tried to document it as best as possible for others to use. If you have
+# any questions, contact me via sames.colin@gmail.com
+
 import socket
 import enum
 import argparse
@@ -9,7 +23,12 @@ import copy
 import struct
 import time
 
-# BGPsec Open
+# BGPsec Open Message in hexadecimal format.
+# Edit values manually to check peering implementations, how they react to malformed
+# messages, or illegal values, such as a incompatibe versions or AFI.
+# This message in particular is a valid open message containing BGPsec capabilities.
+# Refer to BGP (https://www.rfc-editor.org/rfc/rfc4271) and BGPsec
+# (https://www.rfc-editor.org/rfc/rfc8205) specifications for more information.
 bgpsec_open = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff" \
               b"\x00\x6e" \
               b"\x01" \
@@ -31,6 +50,8 @@ bgpsec_open = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff
               b"\x02\x05\x07\x03\x00\x00\x02" \
               b"\x02\x04\x40\x02\x00\x78"
 
+# Malformed BGPsec Open Message in hexadecimal format. It contains unsupported BGPsec
+# version values.
 bgpsec_open_ver = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff" \
               b"\x00\x6e" \
               b"\x01" \
@@ -52,6 +73,8 @@ bgpsec_open_ver = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff
               b"\x02\x05\x07\x03\x10\x00\x02" \
               b"\x02\x04\x40\x02\x00\x78"
 
+# Malformed BGPsec Open Message in hexadecimal format. It contains unsupported BGPsec
+# AFI values.
 bgpsec_open_afi = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff" \
               b"\x00\x6e" \
               b"\x01" \
@@ -72,6 +95,12 @@ bgpsec_open_afi = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff
               b"\x02\x05\x07\x03\x08\x00\x04" \
               b"\x02\x05\x07\x03\x00\x00\x04" \
               b"\x02\x04\x40\x02\x00\x78"
+
+# The next three messages are BGP control messages. Refer to the BGP RFC for more information.
+# EOR is the End of RIB, which indicates that the transmission of BGP updates is complete for now.
+# Keepalive is used to keep the current peering session active.
+# Notification is used to terminate a peering session.
+
 # End of RIB
 eor = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x17\x02\x00\x00\x00\x00"
 
@@ -81,6 +110,7 @@ keepalive = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x
 # Notification
 notification = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x15\x03\x05\x02"
 
+# Values for the BGP Open Messages. Edit them according to your setup.
 my_as = b"\x30\x39"
 my_as_pos = 20
 bgp_id = b"\xac\x12\x00\xc8"
@@ -103,16 +133,6 @@ class States(enum.Enum):
     RECV = 7
     SEND = 8
     DONE = 9
-
-# bgpsec_open = bgpsec_open[0:bgp_id_pos] +\
-              # bgp_id +\
-              # bgpsec_open[bgp_id_pos + len(bgp_id):]
-# bgpsec_open = bgpsec_open[0:my_as_pos] +\
-              # my_as +\
-              # bgpsec_open[my_as_pos + len(my_as):]
-# bgpsec_open = bgpsec_open[0:target_as_pos] +\
-              # target_as +\
-              # bgpsec_open[target_as_pos + len(target_as):]
 
 def send_data(conn, addr, data):
     if log_level:

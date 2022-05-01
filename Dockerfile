@@ -1,3 +1,4 @@
+# Dockerfile is not up to date. Probably will throw a bunch of errors.
 FROM archlinux
 
 RUN pacman -Sy archlinux-keyring --noconfirm \
